@@ -38,7 +38,7 @@ const Dashboard = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                Welcome, Surendra! 👋
+                Welcome, Surendra P! 👋
               </h1>
               <p className="text-muted-foreground">
                 {format(new Date(), 'EEEE, MMMM d, yyyy')}
