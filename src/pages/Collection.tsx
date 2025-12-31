@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Sun, Moon, Droplets, Calculator, Send, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { Layout } from '@/components/Layout';
@@ -13,13 +13,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SessionBadge } from '@/components/SessionBadge';
-import { getFarmers, saveEntry, calculateRate, getEntriesByDate } from '@/lib/storage';
-import { Farmer, MilkEntry } from '@/types/milk';
+import { useFarmers } from '@/hooks/useFarmers';
+import { useTodayEntries, useCreateMilkEntry, calculateRate } from '@/hooks/useMilkEntries';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const Collection = () => {
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const { dairyCenterId } = useAuth();
+  const { data: farmers = [] } = useFarmers();
+  const { data: todayEntries = [] } = useTodayEntries();
+  const createEntry = useCreateMilkEntry();
+  
   const [session, setSession] = useState<'morning' | 'evening'>(() => {
     const hour = new Date().getHours();
     return hour < 14 ? 'morning' : 'evening';
@@ -27,14 +32,6 @@ const Collection = () => {
   const [selectedFarmer, setSelectedFarmer] = useState('');
   const [fatPercentage, setFatPercentage] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [todayEntries, setTodayEntries] = useState<MilkEntry[]>([]);
-
-  const today = format(new Date(), 'yyyy-MM-dd');
-
-  useEffect(() => {
-    setFarmers(getFarmers());
-    setTodayEntries(getEntriesByDate(today));
-  }, [today]);
 
   const calculation = useMemo(() => {
     const fat = parseFloat(fatPercentage) || 0;
@@ -44,7 +41,7 @@ const Collection = () => {
     return { rate, total };
   }, [fatPercentage, quantity]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedFarmer || !fatPercentage || !quantity) {
@@ -52,62 +49,65 @@ const Collection = () => {
       return;
     }
 
-    const farmer = farmers.find(f => f.id === selectedFarmer);
-    if (!farmer) return;
-
-    const entry: MilkEntry = {
-      id: crypto.randomUUID(),
-      farmerId: farmer.id,
-      farmerName: farmer.name,
-      date: today,
+    await createEntry.mutateAsync({
+      farmer_id: selectedFarmer,
       session,
-      fatPercentage: parseFloat(fatPercentage),
+      fat_percentage: parseFloat(fatPercentage),
       quantity: parseFloat(quantity),
-      ratePerLiter: calculation.rate,
-      totalAmount: calculation.total,
-      createdAt: new Date(),
-    };
-
-    saveEntry(entry);
-    setTodayEntries(getEntriesByDate(today));
+      rate: calculation.rate,
+      amount: calculation.total,
+    });
     
     // Reset form
     setSelectedFarmer('');
     setFatPercentage('');
     setQuantity('');
-    
-    toast.success(`Collection recorded for ${farmer.name}!`, {
-      description: `${entry.quantity}L @ ₹${entry.ratePerLiter}/L = ₹${entry.totalAmount.toFixed(0)}`,
-    });
   };
 
-  const handleSendMessage = (entry: MilkEntry) => {
-    const farmer = farmers.find(f => f.id === entry.farmerId);
-    if (!farmer) return;
+  const handleSendMessage = (entry: typeof todayEntries[0]) => {
+    if (!entry.farmer?.phone) {
+      toast.error('No phone number available');
+      return;
+    }
 
     const message = `🥛 Milk Collection Receipt
     
-Dear ${farmer.name},
+Dear ${entry.farmer.name},
 
 Date: ${format(new Date(entry.date), 'dd/MM/yyyy')}
 Session: ${entry.session === 'morning' ? '🌅 Morning' : '🌙 Evening'}
 
-Fat: ${entry.fatPercentage}%
+Fat: ${entry.fat_percentage}%
 Quantity: ${entry.quantity} L
-Rate: ₹${entry.ratePerLiter}/L
-Total: ₹${entry.totalAmount.toFixed(2)}
+Rate: ₹${entry.rate}/L
+Total: ₹${Number(entry.amount).toFixed(2)}
 
 Thank you for your supply!
-- Surendra Milk Center`;
+- Dairy Direct`;
 
     const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/91${farmer.phone}?text=${encodedMessage}`;
+    const whatsappUrl = `https://wa.me/91${entry.farmer.phone}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
     
     toast.success('Opening WhatsApp to send message');
   };
 
   const sessionEntries = todayEntries.filter(e => e.session === session);
+
+  if (!dairyCenterId) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">No Dairy Center Assigned</h2>
+            <p className="text-muted-foreground">
+              Please contact the administrator to assign you to a dairy center.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -247,9 +247,10 @@ Thank you for your supply!
             size="lg" 
             className="w-full gap-2"
             variant={session === 'morning' ? 'morning' : 'evening'}
+            disabled={createEntry.isPending}
           >
             <Check className="w-5 h-5" />
-            Record Collection
+            {createEntry.isPending ? 'Recording...' : 'Record Collection'}
           </Button>
         </form>
 
@@ -273,24 +274,25 @@ Thank you for your supply!
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold">
-                      {entry.farmerName.charAt(0).toUpperCase()}
+                      {entry.farmer?.name?.charAt(0).toUpperCase() || 'F'}
                     </div>
                     <div>
-                      <p className="font-medium">{entry.farmerName}</p>
+                      <p className="font-medium">{entry.farmer?.name || 'Unknown'}</p>
                       <p className="text-sm text-muted-foreground">
-                        Fat: {entry.fatPercentage}% | {entry.quantity}L @ ₹{entry.ratePerLiter}/L
+                        Fat: {entry.fat_percentage}% | {entry.quantity}L @ ₹{entry.rate}/L
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="font-semibold text-accent">₹{entry.totalAmount.toFixed(0)}</p>
+                      <p className="font-semibold text-accent">₹{Number(entry.amount).toFixed(0)}</p>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleSendMessage(entry)}
                       className="text-grass hover:text-grass hover:bg-grass-light"
+                      disabled={!entry.farmer?.phone}
                     >
                       <Send className="w-4 h-4" />
                     </Button>

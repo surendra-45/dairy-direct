@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Phone, MapPin, Trash2, Edit2, Search, Users } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
@@ -21,12 +21,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { getFarmers, saveFarmer, deleteFarmer, updateFarmer } from '@/lib/storage';
-import { Farmer } from '@/types/milk';
+import { useFarmers, useCreateFarmer, useUpdateFarmer, useDeleteFarmer, Farmer } from '@/hooks/useFarmers';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 const Farmers = () => {
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const { dairyCenterId } = useAuth();
+  const { data: farmers = [], isLoading } = useFarmers();
+  const createFarmer = useCreateFarmer();
+  const updateFarmer = useUpdateFarmer();
+  const deleteFarmer = useDeleteFarmer();
+  
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFarmer, setEditingFarmer] = useState<Farmer | null>(null);
@@ -37,43 +42,30 @@ const Farmers = () => {
     village: '',
   });
 
-  useEffect(() => {
-    setFarmers(getFarmers());
-  }, []);
-
   const filteredFarmers = farmers.filter(
     (f) =>
       f.name.toLowerCase().includes(search.toLowerCase()) ||
-      f.phone.includes(search) ||
-      f.village.toLowerCase().includes(search.toLowerCase())
+      (f.phone && f.phone.includes(search)) ||
+      (f.village && f.village.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.phone) {
-      toast.error('Please fill in required fields');
+    if (!formData.name) {
+      toast.error('Please enter a name');
       return;
     }
 
     if (editingFarmer) {
-      const updated: Farmer = {
-        ...editingFarmer,
+      await updateFarmer.mutateAsync({
+        id: editingFarmer.id,
         ...formData,
-      };
-      updateFarmer(updated);
-      toast.success('Farmer updated successfully!');
+      });
     } else {
-      const newFarmer: Farmer = {
-        id: crypto.randomUUID(),
-        ...formData,
-        createdAt: new Date(),
-      };
-      saveFarmer(newFarmer);
-      toast.success('Farmer registered successfully!');
+      await createFarmer.mutateAsync(formData);
     }
     
-    setFarmers(getFarmers());
     setFormData({ name: '', phone: '', village: '' });
     setEditingFarmer(null);
     setIsDialogOpen(false);
@@ -83,17 +75,15 @@ const Farmers = () => {
     setEditingFarmer(farmer);
     setFormData({
       name: farmer.name,
-      phone: farmer.phone,
-      village: farmer.village,
+      phone: farmer.phone || '',
+      village: farmer.village || '',
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      deleteFarmer(deleteId);
-      setFarmers(getFarmers());
-      toast.success('Farmer removed successfully');
+      await deleteFarmer.mutateAsync(deleteId);
       setDeleteId(null);
     }
   };
@@ -103,6 +93,21 @@ const Farmers = () => {
     setEditingFarmer(null);
     setFormData({ name: '', phone: '', village: '' });
   };
+
+  if (!dairyCenterId) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">No Dairy Center Assigned</h2>
+            <p className="text-muted-foreground">
+              Please contact the administrator to assign you to a dairy center.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -138,14 +143,13 @@ const Farmers = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number *</Label>
+                  <Label htmlFor="phone">Phone Number</Label>
                   <Input
                     id="phone"
                     type="tel"
                     placeholder="Enter phone number"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -166,8 +170,14 @@ const Farmers = () => {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" className="flex-1">
-                    {editingFarmer ? 'Update' : 'Register'}
+                  <Button 
+                    type="submit" 
+                    className="flex-1"
+                    disabled={createFarmer.isPending || updateFarmer.isPending}
+                  >
+                    {createFarmer.isPending || updateFarmer.isPending 
+                      ? 'Saving...' 
+                      : (editingFarmer ? 'Update' : 'Register')}
                   </Button>
                 </div>
               </form>
@@ -187,7 +197,12 @@ const Farmers = () => {
         </div>
 
         {/* Farmers List */}
-        {filteredFarmers.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-16 bg-card rounded-2xl border border-border">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading farmers...</p>
+          </div>
+        ) : filteredFarmers.length === 0 ? (
           <div className="text-center py-16 bg-card rounded-2xl border border-border">
             <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
             <h3 className="font-display font-semibold text-lg mb-2">No Farmers Found</h3>
@@ -236,10 +251,12 @@ const Farmers = () => {
                   {farmer.name}
                 </h3>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Phone className="w-4 h-4" />
-                    {farmer.phone}
-                  </div>
+                  {farmer.phone && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Phone className="w-4 h-4" />
+                      {farmer.phone}
+                    </div>
+                  )}
                   {farmer.village && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="w-4 h-4" />
@@ -263,8 +280,12 @@ const Farmers = () => {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-                Remove
+              <AlertDialogAction 
+                onClick={handleDelete} 
+                className="bg-destructive text-destructive-foreground"
+                disabled={deleteFarmer.isPending}
+              >
+                {deleteFarmer.isPending ? 'Removing...' : 'Remove'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
