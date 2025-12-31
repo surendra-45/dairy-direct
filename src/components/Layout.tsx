@@ -1,7 +1,10 @@
 import { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, Plus, FileText, Settings } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Users, Plus, FileText, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface LayoutProps {
   children: ReactNode;
@@ -16,6 +19,14 @@ const navItems = [
 
 export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Logged out successfully');
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,6 +65,19 @@ export const Layout = ({ children }: LayoutProps) => {
                 </Link>
               );
             })}
+            <div className="ml-4 pl-4 border-l border-border flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                {user?.username}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
           </nav>
         </div>
       </header>
