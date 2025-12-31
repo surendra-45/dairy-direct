@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { FileText, Printer, Calendar, ChevronLeft, ChevronRight, Download, Send } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { format } from 'date-fns';
+import { FileText, Printer, Calendar, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,8 +11,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SessionBadge } from '@/components/SessionBadge';
-import { getFarmers, getEntries } from '@/lib/storage';
-import { Farmer, MilkEntry, MonthlyStatement } from '@/types/milk';
+import { useFarmers } from '@/hooks/useFarmers';
+import { useMonthEntries } from '@/hooks/useMilkEntries';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 const months = [
@@ -21,37 +22,28 @@ const months = [
 ];
 
 const Reports = () => {
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
-  const [entries, setEntries] = useState<MilkEntry[]>([]);
+  const { dairyCenterId } = useAuth();
+  const { data: farmers = [] } = useFarmers();
   const [selectedFarmer, setSelectedFarmer] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const { data: entries = [], isLoading } = useMonthEntries(selectedMonth, selectedYear);
   const printRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setFarmers(getFarmers());
-    setEntries(getEntries());
-  }, []);
-
   const filteredEntries = useMemo(() => {
-    return entries.filter(e => {
-      const entryDate = new Date(e.date);
-      const matchesMonth = entryDate.getMonth() === selectedMonth;
-      const matchesYear = entryDate.getFullYear() === selectedYear;
-      const matchesFarmer = selectedFarmer === 'all' || e.farmerId === selectedFarmer;
-      return matchesMonth && matchesYear && matchesFarmer;
-    });
-  }, [entries, selectedMonth, selectedYear, selectedFarmer]);
+    if (selectedFarmer === 'all') return entries;
+    return entries.filter(e => e.farmer_id === selectedFarmer);
+  }, [entries, selectedFarmer]);
 
-  const statement: MonthlyStatement | null = useMemo(() => {
+  const statement = useMemo(() => {
     if (selectedFarmer === 'all' || filteredEntries.length === 0) return null;
     
     const farmer = farmers.find(f => f.id === selectedFarmer);
     if (!farmer) return null;
 
-    const totalQuantity = filteredEntries.reduce((sum, e) => sum + e.quantity, 0);
-    const totalAmount = filteredEntries.reduce((sum, e) => sum + e.totalAmount, 0);
-    const totalFat = filteredEntries.reduce((sum, e) => sum + e.fatPercentage * e.quantity, 0);
+    const totalQuantity = filteredEntries.reduce((sum, e) => sum + Number(e.quantity), 0);
+    const totalAmount = filteredEntries.reduce((sum, e) => sum + Number(e.amount), 0);
+    const totalFat = filteredEntries.reduce((sum, e) => sum + Number(e.fat_percentage) * Number(e.quantity), 0);
     const averageFat = totalQuantity > 0 ? totalFat / totalQuantity : 0;
 
     return {
@@ -68,9 +60,9 @@ const Reports = () => {
   }, [filteredEntries, selectedFarmer, farmers, selectedMonth, selectedYear]);
 
   const summaryStats = useMemo(() => {
-    const totalQuantity = filteredEntries.reduce((sum, e) => sum + e.quantity, 0);
-    const totalAmount = filteredEntries.reduce((sum, e) => sum + e.totalAmount, 0);
-    const uniqueFarmers = new Set(filteredEntries.map(e => e.farmerId)).size;
+    const totalQuantity = filteredEntries.reduce((sum, e) => sum + Number(e.quantity), 0);
+    const totalAmount = filteredEntries.reduce((sum, e) => sum + Number(e.amount), 0);
+    const uniqueFarmers = new Set(filteredEntries.map(e => e.farmer_id)).size;
     return { totalQuantity, totalAmount, uniqueFarmers };
   }, [filteredEntries]);
 
@@ -79,14 +71,14 @@ const Reports = () => {
   };
 
   const handleSendStatement = () => {
-    if (!statement) return;
-    
-    const farmer = farmers.find(f => f.id === selectedFarmer);
-    if (!farmer) return;
+    if (!statement || !statement.phone) {
+      toast.error('No phone number available');
+      return;
+    }
 
     const message = `📊 Monthly Milk Statement
     
-Dear ${farmer.name},
+Dear ${statement.farmerName},
 
 Month: ${statement.month} ${statement.year}
 
@@ -96,10 +88,10 @@ Summary:
 • Total Amount: ₹${statement.totalAmount.toFixed(2)}
 
 Thank you for your continued supply!
-- Surendra Milk Center`;
+- Dairy Direct`;
 
     const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/91${farmer.phone}?text=${encodedMessage}`;
+    const whatsappUrl = `https://wa.me/91${statement.phone}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
     
     toast.success('Opening WhatsApp to send statement');
@@ -122,6 +114,21 @@ Thank you for your continued supply!
       setSelectedMonth(m => m + 1);
     }
   };
+
+  if (!dairyCenterId) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">No Dairy Center Assigned</h2>
+            <p className="text-muted-foreground">
+              Please contact the administrator to assign you to a dairy center.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -207,8 +214,8 @@ Thank you for your continued supply!
           {/* Print Header */}
           <div className="print-only hidden border-b-2 border-foreground pb-4 mb-6">
             <div className="text-center">
-              <h1 className="text-2xl font-display font-bold">Surendra Milk Collection Center</h1>
-              <p className="text-muted-foreground">Village Milk Collection & Distribution</p>
+              <h1 className="text-2xl font-display font-bold">Dairy Direct</h1>
+              <p className="text-muted-foreground">Milk Collection Center</p>
             </div>
           </div>
 
@@ -230,13 +237,18 @@ Thank you for your continued supply!
             {statement && (
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Phone</p>
-                <p className="font-medium">{statement.phone}</p>
+                <p className="font-medium">{statement.phone || 'N/A'}</p>
               </div>
             )}
           </div>
 
           {/* Entries Table */}
-          {filteredEntries.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p>Loading entries...</p>
+            </div>
+          ) : filteredEntries.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>No collections found for this period</p>
@@ -268,12 +280,12 @@ Thank you for your continued supply!
                           <SessionBadge session={entry.session} />
                         </td>
                         {selectedFarmer === 'all' && (
-                          <td className="py-3 px-2">{entry.farmerName}</td>
+                          <td className="py-3 px-2">{entry.farmer?.name || 'Unknown'}</td>
                         )}
-                        <td className="py-3 px-2 text-right">{entry.fatPercentage}%</td>
+                        <td className="py-3 px-2 text-right">{entry.fat_percentage}%</td>
                         <td className="py-3 px-2 text-right">{entry.quantity}</td>
-                        <td className="py-3 px-2 text-right">₹{entry.ratePerLiter}</td>
-                        <td className="py-3 px-2 text-right font-medium">₹{entry.totalAmount.toFixed(0)}</td>
+                        <td className="py-3 px-2 text-right">₹{entry.rate}</td>
+                        <td className="py-3 px-2 text-right font-medium">₹{Number(entry.amount).toFixed(0)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -315,7 +327,7 @@ Thank you for your continued supply!
               {/* Print Footer */}
               <div className="print-only hidden mt-8 pt-4 border-t border-border text-center text-sm text-muted-foreground">
                 <p>Generated on {format(new Date(), 'dd/MM/yyyy hh:mm a')}</p>
-                <p className="mt-1">Surendra Milk Collection Center | Contact: Your Phone Number</p>
+                <p className="mt-1">Dairy Direct Milk Collection Center</p>
               </div>
             </>
           )}

@@ -6,29 +6,42 @@ import { Layout } from '@/components/Layout';
 import { StatCard } from '@/components/StatCard';
 import { SessionBadge } from '@/components/SessionBadge';
 import { Button } from '@/components/ui/button';
-import { getEntries, getFarmers, getEntriesByDate } from '@/lib/storage';
-import { MilkEntry } from '@/types/milk';
+import { useAuth } from '@/contexts/AuthContext';
+import { useFarmers } from '@/hooks/useFarmers';
+import { useTodayEntries } from '@/hooks/useMilkEntries';
 
 const Dashboard = () => {
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const { profile, dairyCenterId } = useAuth();
+  const { data: farmers = [] } = useFarmers();
+  const { data: todayEntries = [], isLoading } = useTodayEntries();
   
   const stats = useMemo(() => {
-    const todayEntries = getEntriesByDate(today);
-    const farmers = getFarmers();
-    const allEntries = getEntries();
-    
     const morningEntries = todayEntries.filter(e => e.session === 'morning');
     const eveningEntries = todayEntries.filter(e => e.session === 'evening');
     
     return {
-      todayTotal: todayEntries.reduce((sum, e) => sum + e.quantity, 0),
-      todayAmount: todayEntries.reduce((sum, e) => sum + e.totalAmount, 0),
-      morningTotal: morningEntries.reduce((sum, e) => sum + e.quantity, 0),
-      eveningTotal: eveningEntries.reduce((sum, e) => sum + e.quantity, 0),
+      todayTotal: todayEntries.reduce((sum, e) => sum + Number(e.quantity), 0),
+      todayAmount: todayEntries.reduce((sum, e) => sum + Number(e.amount), 0),
+      morningTotal: morningEntries.reduce((sum, e) => sum + Number(e.quantity), 0),
+      eveningTotal: eveningEntries.reduce((sum, e) => sum + Number(e.quantity), 0),
       farmersCount: farmers.length,
-      todayEntries,
     };
-  }, [today]);
+  }, [todayEntries, farmers]);
+
+  if (!dairyCenterId) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">No Dairy Center Assigned</h2>
+            <p className="text-muted-foreground">
+              Please contact the administrator to assign you to a dairy center.
+            </p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -38,7 +51,7 @@ const Dashboard = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
-                Welcome, Surendra P! 👋
+                Welcome, {profile?.full_name || 'Director'}! 👋
               </h1>
               <p className="text-muted-foreground">
                 {format(new Date(), 'EEEE, MMMM d, yyyy')}
@@ -116,7 +129,12 @@ const Dashboard = () => {
             </Link>
           </div>
           
-          {stats.todayEntries.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p>Loading collections...</p>
+            </div>
+          ) : todayEntries.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Droplets className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p>No collections yet today</p>
@@ -124,35 +142,35 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {stats.todayEntries.slice(0, 5).map((entry) => (
+              {todayEntries.slice(0, 5).map((entry) => (
                 <div
                   key={entry.id}
                   className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-semibold">
-                      {entry.farmerName.charAt(0).toUpperCase()}
+                      {entry.farmer?.name?.charAt(0).toUpperCase() || 'F'}
                     </div>
                     <div>
-                      <p className="font-medium text-foreground">{entry.farmerName}</p>
+                      <p className="font-medium text-foreground">{entry.farmer?.name || 'Unknown'}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <SessionBadge session={entry.session} />
                         <span className="text-xs text-muted-foreground">
-                          Fat: {entry.fatPercentage}%
+                          Fat: {entry.fat_percentage}%
                         </span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-foreground">{entry.quantity} L</p>
-                    <p className="text-sm text-accent font-medium">₹{entry.totalAmount.toFixed(0)}</p>
+                    <p className="text-sm text-accent font-medium">₹{Number(entry.amount).toFixed(0)}</p>
                   </div>
                 </div>
               ))}
-              {stats.todayEntries.length > 5 && (
+              {todayEntries.length > 5 && (
                 <Link to="/reports" className="block">
                   <Button variant="ghost" className="w-full">
-                    View all {stats.todayEntries.length} entries
+                    View all {todayEntries.length} entries
                   </Button>
                 </Link>
               )}

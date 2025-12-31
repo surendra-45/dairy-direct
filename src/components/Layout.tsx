@@ -20,10 +20,10 @@ const navItems = [
 export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { profile, signOut } = useAuth();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await signOut();
     toast.success('Logged out successfully');
     navigate('/login');
   };
@@ -67,7 +67,7 @@ export const Layout = ({ children }: LayoutProps) => {
             })}
             <div className="ml-4 pl-4 border-l border-border flex items-center gap-3">
               <span className="text-sm text-muted-foreground">
-                {user?.username}
+                {profile?.full_name || profile?.email}
               </span>
               <Button
                 variant="ghost"

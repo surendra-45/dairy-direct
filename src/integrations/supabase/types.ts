@@ -14,16 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dairy_centers: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      farmers: {
+        Row: {
+          created_at: string
+          dairy_center_id: string
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+          village: string | null
+        }
+        Insert: {
+          created_at?: string
+          dairy_center_id: string
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+          village?: string | null
+        }
+        Update: {
+          created_at?: string
+          dairy_center_id?: string
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+          village?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "farmers_dairy_center_id_fkey"
+            columns: ["dairy_center_id"]
+            isOneToOne: false
+            referencedRelation: "dairy_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      milk_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          dairy_center_id: string
+          date: string
+          farmer_id: string
+          fat_percentage: number
+          id: string
+          quantity: number
+          rate: number
+          session: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          dairy_center_id: string
+          date?: string
+          farmer_id: string
+          fat_percentage: number
+          id?: string
+          quantity: number
+          rate: number
+          session: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          dairy_center_id?: string
+          date?: string
+          farmer_id?: string
+          fat_percentage?: number
+          id?: string
+          quantity?: number
+          rate?: number
+          session?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "milk_entries_dairy_center_id_fkey"
+            columns: ["dairy_center_id"]
+            isOneToOne: false
+            referencedRelation: "dairy_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "milk_entries_farmer_id_fkey"
+            columns: ["farmer_id"]
+            isOneToOne: false
+            referencedRelation: "farmers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          dairy_center_id: string | null
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dairy_center_id?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dairy_center_id?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_dairy_center_id_fkey"
+            columns: ["dairy_center_id"]
+            isOneToOne: false
+            referencedRelation: "dairy_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_dairy_center: { Args: { _user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "dairy_director"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +328,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "dairy_director"],
+    },
   },
 } as const
