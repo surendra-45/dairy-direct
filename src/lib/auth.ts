@@ -9,7 +9,7 @@ export interface AuthUser {
 export const login = (username: string, password: string): boolean => {
   // Simple authentication - in production, use proper auth
   // Default credentials: admin/admin123
-  if (username === 'admin' && password === 'admin123') {
+  if (username === 'surendra' && password === 'dairy@123') {
     const user: AuthUser = {
       username,
       isAuthenticated: true,

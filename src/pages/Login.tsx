@@ -81,12 +81,12 @@ const Login = () => {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+          {/* <div className="mt-6 p-4 bg-muted/50 rounded-lg">
             <p className="text-sm text-muted-foreground text-center">
               <strong>Default Credentials:</strong><br />
               Username: admin | Password: admin123
             </p>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
     </div>
