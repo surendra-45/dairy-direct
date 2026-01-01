@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Users, Plus, FileText, LogOut } from 'lucide-react';
+import { Home, Users, Plus, FileText, LogOut, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
+const baseNavItems = [
   { path: '/', icon: Home, label: 'Dashboard' },
   { path: '/farmers', icon: Users, label: 'Farmers' },
   { path: '/collection', icon: Plus, label: 'Collection' },
@@ -20,7 +20,12 @@ const navItems = [
 export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, signOut } = useAuth();
+  const { profile, role, signOut } = useAuth();
+
+  // Add admin link for super admins
+  const navItems = role === 'super_admin'
+    ? [...baseNavItems, { path: '/admin', icon: Shield, label: 'Admin' }]
+    : baseNavItems;
 
   const handleLogout = async () => {
     await signOut();

@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Farmers from "./pages/Farmers";
 import Collection from "./pages/Collection";
 import Reports from "./pages/Reports";
+import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/farmers" element={<ProtectedRoute><Farmers /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute requiredRole="super_admin"><Admin /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
